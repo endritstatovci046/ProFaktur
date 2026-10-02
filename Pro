@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ProInvoice - Faturë Proforma në PDF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16202b;--mute:#5d6b7a;--line:#d9dee5;--accent:#0f5c8a;--accent-ink:#fff;--err:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10161d;--card:#18212b;--ink:#e7edf3;--mute:#9aa8b6;--line:#2c3947;--accent:#5fb0e0;--accent-ink:#06202f;--err:#ff8a80}}
+:root[data-theme="dark"]{--bg:#10161d;--card:#18212b;--ink:#e7edf3;--mute:#9aa8b6;--line:#2c3947;--accent:#5fb0e0;--accent-ink:#06202f;--err:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.5rem;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 20px}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+h2{font-size:1rem;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label{display:block;font-size:.85rem;color:var(--mute)}
+input,textarea,select{width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+input:focus,textarea:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.items{overflow-x:auto}
+.row{display:grid;grid-template-columns:minmax(180px,1fr) 80px 110px 90px 36px;gap:8px;align-items:end;margin-bottom:8px;min-width:560px}
+.amt{padding:8px 0;text-align:right;font-variant-numeric:tabular-nums}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;padding:8px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.tot{margin-left:auto;max-width:300px;font-variant-numeric:tabular-nums}
+.tot div{display:flex;justify-content:space-between;padding:3px 0}
+.tot .g{border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-weight:700;font-size:1.1rem}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+#msg{color:var(--mute)} #msg.err{color:var(--err)}
+</style>
+</head>
+<body>
+<main>
+<h1>ProInvoice</h1>
+<p class="sub">Plotëso të dhënat dhe ruaje faturën proforma si PDF për ta dërguar klientit.</p>
+
+<section>
+<h2>Shitësi (ti)</h2>
+<div class="grid">
+<label>Emri i biznesit<input id="sName" autocomplete="organization" value="ESTHYDROTECH"></label>
+<label>Adresa<input id="sAddr"></label>
+<label>NUI / Nr. fiskal<input id="sNui" value="812442614"></label>
+<label>Telefon / Email<input id="sContact"></label>
+<label>Llogaria bankare (IBAN)<input id="sBank"></label>
+</div>
+<p style="margin:12px 0 0"><button id="saveSeller" type="button">Ruaj të dhënat e shitësit</button> <span id="sMsg" role="status" style="color:var(--mute);margin-left:8px"></span></p>
+</section>
+
+<section>
+<h2>Klienti</h2>
+<div class="grid">
+<label>Emri i klientit<input id="cName"></label>
+<label>Adresa<input id="cAddr"></label>
+<label>NUI / Nr. fiskal<input id="cNui"></label>
+</div>
+</section>
+
+<section>
+<h2>Detajet e proformës</h2>
+<div class="grid">
+<label>Nr. i proformës<input id="no" value="PRO-001"></label>
+<label>Data<input id="date" type="date"></label>
+<label>Vlen deri më<input id="due" type="date"></label>
+<label>TVSH %<input id="vat" type="number" min="0" step="0.01" value="18"></label>
+<label>Valuta<select id="cur"><option>EUR</option><option>USD</option><option>CHF</option></select></label>
+<label>Gjuha e PDF-së<select id="lang"><option value="sq">Shqip</option><option value="en">English</option></select></label>
+</div>
+</section>
+
+<section>
+<h2>Artikujt</h2>
+<div class="items"><div id="rows"></div></div>
+<p><button id="add" type="button">Shto rresht</button></p>
+<div class="tot">
+<div><span>Nëntotali</span><span id="tSub">0.00</span></div>
+<div><span>TVSH</span><span id="tVat">0.00</span></div>
+<div class="g"><span>Totali</span><span id="tAll">0.00</span></div>
+</div>
+</section>
+
+<section>
+<label>Shënime / kushtet e pagesës<textarea id="notes" rows="3">Pagesa brenda 7 ditëve nga pranimi i faturës përfundimtare.</textarea></label>
+</section>
+
+<div class="bar">
+<button class="primary" id="pdf" type="button">Ruaj si PDF</button>
+<span id="msg" role="status"></span>
+</div>
+</main>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var SK="proinvoice-seller", fields=["sName","sAddr","sNui","sContact","sBank"];
+var T={
+sq:{title:"FATURË PROFORMA",no:"Nr.",date:"Data",due:"Vlen deri më",from:"Shitësi",to:"Klienti",nui:"NUI",desc:"Përshkrimi",qty:"Sasia",price:"Çmimi",amt:"Shuma",sub:"Nëntotali",vat:"TVSH",tot:"Totali",bank:"Llogaria bankare",notes:"Shënime",foot:"Kjo është faturë proforma dhe nuk është dokument fiskal."},
+en:{title:"PROFORMA INVOICE",no:"No.",date:"Date",due:"Valid until",from:"From",to:"Bill to",nui:"Tax ID",desc:"Description",qty:"Qty",price:"Price",amt:"Amount",sub:"Subtotal",vat:"VAT",tot:"Total",bank:"Bank account",notes:"Notes",foot:"This is a proforma invoice and not a fiscal document."}
+};
+function store(set){try{if(set)localStorage.setItem(SK,JSON.stringify(fields.reduce(function(o,f){o[f]=$(f).value;return o},{})));else{var d=JSON.parse(localStorage.getItem(SK)||"null");if(d)fields.forEach(function(f){if(d[f]!==undefined)$(f).value=d[f]})}return true}catch(e){return false}}
+function money(n){return n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function addRow(d,q,p){
+var r=document.createElement("div");r.className="row";
+r.innerHTML='<label>Përshkrimi<input class="d"></label><label>Sasia<input class="q" type="number" min="0" step="any"></label><label>Çmimi<input class="p" type="number" min="0" step="0.01"></label><div class="amt">0.00</div><button type="button" aria-label="Fshij rreshtin">×</button>';
+r.querySelector(".d").value=d||"";r.querySelector(".q").value=q||1;r.querySelector(".p").value=p||"";
+r.querySelector("button").onclick=function(){r.remove();calc()};
+r.addEventListener("input",calc);$("rows").appendChild(r);calc();
+}
+function items(){return Array.prototype.map.call(document.querySelectorAll(".row"),function(r){
+var q=parseFloat(r.querySelector(".q").value)||0,p=parseFloat(r.querySelector(".p").value)||0;
+return{d:r.querySelector(".d").value.trim(),q:q,p:p,a:q*p,el:r}})}
+function totals(){var it=items(),s=0;it.forEach(function(x){s+=x.a});var v=s*(parseFloat($("vat").value)||0)/100;return{it:it,s:s,v:v,t:s+v}}
+function calc(){var t=totals();t.it.forEach(function(x){x.el.querySelector(".amt").textContent=money(x.a)});
+$("tSub").textContent=money(t.s);$("tVat").textContent=money(t.v);$("tAll").textContent=money(t.t)}
+function say(m,e){var o=$("msg");o.textContent=m;o.className=e?"err":""}
+function fmtDate(v){if(!v)return"";var p=v.split("-");return p[2]+"."+p[1]+"."+p[0]}
+
+function build(){
+var L=T[$("lang").value],cur=$("cur").value,t=totals(),J=window.jspdf.jsPDF,doc=new J({unit:"mm",format:"a4"});
+var W=210,M=18,y=22;
+doc.setFont("helvetica","bold");doc.setFontSize(20);doc.text(L.title,M,y);
+doc.setFontSize(10);doc.setFont("helvetica","normal");
+doc.text(L.no+" "+$("no").value,W-M,y-8,{align:"right"});
+doc.text(L.date+": "+fmtDate($("date").value),W-M,y-2,{align:"right"});
+if($("due").value)doc.text(L.due+": "+fmtDate($("due").value),W-M,y+4,{align:"right"});
+y+=16;
+function block(x,h,name,addr,nui,extra){
+doc.setFont("helvetica","bold");doc.text(h,x,y);doc.setFont("helvetica","normal");
+var ls=[name,addr,nui?L.nui+": "+nui:"",extra].filter(Boolean),yy=y+5;
+ls.forEach(function(l){doc.splitTextToSize(l,78).forEach(function(s){doc.text(s,x,yy);yy+=5})});return yy}
+var y1=block(M,L.from,$("sName").value,$("sAddr").value,$("sNui").value,$("sContact").value);
+var y2=block(W/2+4,L.to,$("cName").value,$("cAddr").value,$("cNui").value,"");
+y=Math.max(y1,y2)+6;
+function head(){doc.setFillColor(15,92,138);doc.rect(M,y,W-2*M,8,"F");doc.setTextColor(255);doc.setFont("helvetica","bold");
+doc.text(L.desc,M+2,y+5.5);doc.text(L.qty,120,y+5.5,{align:"right"});doc.text(L.price,148,y+5.5,{align:"right"});doc.text(L.amt,W-M-2,y+5.5,{align:"right"});
+doc.setTextColor(0);doc.setFont("helvetica","normal");y+=12}
+head();
+t.it.forEach(function(x){
+var ds=doc.splitTextToSize(x.d||"-",78),h=Math.max(ds.length*5,6);
+if(y+h>262){doc.addPage();y=20;head()}
+doc.text(ds,M+2,y);doc.text(String(x.q),120,y,{align:"right"});doc.text(money(x.p),148,y,{align:"right"});doc.text(money(x.a),W-M-2,y,{align:"right"});
+y+=h+1;doc.setDrawColor(217,222,229);doc.line(M,y-3,W-M,y-3)});
+if(y>235){doc.addPage();y=20}
+y+=4;
+function tl(l,v,b){doc.setFont("helvetica",b?"bold":"normal");doc.text(l,135,y);doc.text(money(v)+" "+cur,W-M-2,y,{align:"right"});y+=6}
+tl(L.sub,t.s);tl(L.vat+" "+(parseFloat($("vat").value)||0)+"%",t.v);doc.setFontSize(12);tl(L.tot,t.t,true);doc.setFontSize(10);
+y+=4;
+if($("sBank").value){doc.setFont("helvetica","bold");doc.text(L.bank,M,y);doc.setFont("helvetica","normal");doc.text($("sBank").value,M+34,y);y+=7}
+if($("notes").value.trim()){doc.setFont("helvetica","bold");doc.text(L.notes,M,y);y+=5;doc.setFont("helvetica","normal");
+doc.splitTextToSize($("notes").value,W-2*M).forEach(function(s){if(y>278){doc.addPage();y=20}doc.text(s,M,y);y+=5})}
+doc.setFontSize(8);doc.setTextColor(110);doc.text(L.foot,M,287);
+return doc}
+
+$("pdf").onclick=async function(){
+if(!window.jspdf){say("Biblioteka PDF nuk u ngarkua. Kontrollo internetin dhe rifresko faqen.",true);return}
+if(!items().some(function(x){return x.d||x.a})){say("Shto të paktën një artikull.",true);return}
+store(true);
+try{
+build().save("Proforma-"+($("no").value||"fature").replace(/[^\w.-]+/g,"_")+".pdf");
+say("PDF u ruajt.");
+}catch(e){say("PDF nuk u ruajt. Provo përsëri.",true)}
+};
+$("saveSeller").onclick=function(){
+var ok=store(true),o=$("sMsg");
+o.textContent=ok?"U ruajt. Do të plotësohen vetë herës tjetër.":"Nuk u ruajt: shfletuesi bllokon ruajtjen.";
+o.style.color=ok?"var(--mute)":"var(--err)"};
+$("add").onclick=function(){addRow()};
+$("vat").addEventListener("input",calc);
+$("date").value=new Date().toISOString().slice(0,10);
+store(false);addRow();
+})();
+</script>
+</body>
+</html>
